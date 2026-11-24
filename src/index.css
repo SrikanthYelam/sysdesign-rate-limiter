@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-200 font-sans antialiased;
+}
+
+/* Slim slider styling shared by every parameter control. */
+input[type='range'] {
+  @apply w-full cursor-pointer appearance-none bg-transparent;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  @apply h-1 rounded-full bg-slate-700;
+}
+input[type='range']::-moz-range-track {
+  @apply h-1 rounded-full bg-slate-700;
+}
+input[type='range']::-webkit-slider-thumb {
+  @apply -mt-1.5 h-4 w-4 appearance-none rounded-full border-2 border-slate-950 bg-sky-400;
+}
+input[type='range']::-moz-range-thumb {
+  @apply h-4 w-4 rounded-full border-2 border-slate-950 bg-sky-400;
+}
