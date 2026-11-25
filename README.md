@@ -25,6 +25,32 @@ npm run dev        # http://localhost:5173
 npm run build      # type-check + production build
 ```
 
+## Distributed gateway (Phase 2, Token Bucket)
+
+Needs the .NET 11 SDK and Docker.
+
+```bash
+cd backend
+docker compose up --build    # Redis + 3 gateway replicas + NGINX on http://localhost:8080
+dotnet test                  # concurrency test: 100 parallel requests across 3 instances
+```
+
+The test starts a real Redis with Testcontainers and checks that exactly
+`capacity` requests pass, however the burst is interleaved across instances.
+Replacing the atomic Lua script with a plain read-then-write makes it fail
+(all 100 requests pass).
+
+Try it by hand once the stack is up:
+
+```bash
+curl -X PUT localhost:8080/api/rate-limit/config -H 'content-type: application/json' \
+  -d '{"algorithm":"token-bucket","capacity":10,"refillRate":1}'
+curl -i -X POST localhost:8080/api/rate-limit/evaluate -H 'content-type: application/json' \
+  -d '{"requestId":"r1","clientId":"me"}'    # X-Instance shows which replica answered
+```
+
+The simulator UI does not call the backend yet; it still runs the client-side engine.
+
 ## Project layout
 
 ```
@@ -36,9 +62,13 @@ src/
   hooks/        useSimulation: traffic generator, particles, telemetry sampling
   components/   Controls, live pipeline + per-algorithm visualizers, telemetry
   data/         "Under the Hood" reference content
+backend/
+  src/RateLimiter.Gateway/        ASP.NET Core gateway: config + evaluate endpoints
+  tests/RateLimiter.Gateway.Tests/ Concurrency test across 3 instances (Testcontainers)
+  docker-compose.yml, nginx.conf  Redis + 3 replicas + round-robin load balancer
 backend-reference/
   README.md       Phase 2 plan: ASP.NET Core middleware + Redis + Lua
-  TokenBucket.lua Atomic Redis token bucket script
+  TokenBucket.lua Atomic Redis token bucket script (embedded by the gateway)
 ```
 
 ### Design notes

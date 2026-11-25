@@ -1,0 +1,25 @@
+# Three gateway replicas share one Redis behind an NGINX round-robin load balancer.
+#   cd backend && docker compose up --build
+#   then call http://localhost:8080/api/rate-limit/...
+name: rate-limiter
+
+services:
+  redis:
+    image: redis:7.4
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: backend/src/RateLimiter.Gateway/Dockerfile
+    environment:
+      Redis__ConnectionString: redis:6379
+    deploy:
+      replicas: 3
+    depends_on: [redis]
+
+  lb:
+    image: nginx:1.27
+    ports: ["8080:80"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [gateway]
