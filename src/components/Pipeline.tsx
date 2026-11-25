@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ALGORITHM_INFO } from '../data/algorithmInfo';
 import { useAnimationFrame } from '../hooks/useAnimationFrame';
 import { INBOUND_TRAVEL_MS, type ParticlePhase, type Simulation } from '../hooks/useSimulation';
@@ -98,7 +98,7 @@ const RequestParticle = memo(function RequestParticle({ id, phase, lane, g, onDo
   );
 });
 
-function Node({ x, y, label, sub, accent }: { x: number; y: number; label: string; sub: string; accent: string }) {
+function Node({ x, y, label, sub, accent }: { x: number; y: number; label: string; sub: ReactNode; accent: string }) {
   return (
     <div
       className="absolute flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-900 py-3 text-center"
@@ -178,7 +178,19 @@ export function Pipeline({ sim }: { sim: Simulation }) {
               </g>
             </svg>
 
-            <Node x={g.clientsX} y={g.midY} label="Clients" sub={`${sim.rps} rps`} accent="bg-sky-400" />
+            <Node
+              x={g.clientsX}
+              y={g.midY}
+              label="Clients"
+              sub={
+                <>
+                  target {sim.rps} rps
+                  <br />
+                  actual <span className="text-sky-300">{sim.telemetry.series[sim.telemetry.series.length - 1].incoming}</span> rps
+                </>
+              }
+              accent="bg-sky-400"
+            />
             <Node
               x={g.upstreamX}
               y={g.midY}
