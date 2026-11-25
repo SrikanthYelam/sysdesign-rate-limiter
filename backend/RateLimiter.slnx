@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RateLimiter.Gateway/RateLimiter.Gateway.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RateLimiter.Gateway.Tests/RateLimiter.Gateway.Tests.csproj" />
+  </Folder>
+</Solution>
