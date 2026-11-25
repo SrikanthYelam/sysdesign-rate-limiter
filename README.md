@@ -8,6 +8,15 @@ throughput live.
 
 Built with React, TypeScript, Tailwind CSS and Framer Motion.
 
+![Token Bucket absorbing a 25-request burst](docs/screenshots/token-bucket.png)
+
+## Screenshots
+
+| Leaky Bucket | Fixed Window Counter | Sliding Window Log |
+|---|---|---|
+| ![Leaky Bucket queue during a burst](docs/screenshots/leaky-bucket.png) | ![Fixed Window Counter timeline](docs/screenshots/fixed-window.png) | ![Sliding Window Log with Poisson jitter](docs/screenshots/sliding-window-log.png) |
+| A burst fills the FIFO queue; upstream still gets a steady 5 rps. | Each window allows up to the limit, then resets at the boundary. | With jitter on, the actual rate varies around the target. |
+
 ## Run it
 
 ```bash
