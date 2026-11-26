@@ -1,4 +1,4 @@
-# Phase 2: Distributed Backend (.NET 8 + Redis)
+# Phase 2: Distributed Backend (.NET 11 + Redis)
 
 Phase 1 runs every algorithm inside the browser. Phase 2 moves the decision to
 a real gateway so that **many gateway instances share one limit**. The UI does
@@ -13,7 +13,7 @@ not change: it switches from `ClientSimulationProvider` to `RemoteApiProvider`
    ▼                                       │
  Load balancer
    │            │            │
- Gateway #1   Gateway #2   Gateway #3     ASP.NET Core 8 Web API
+ Gateway #1   Gateway #2   Gateway #3     ASP.NET Core 11 Web API
    │  custom RateLimitingMiddleware (one EVALSHA per request)
    └────────────┼────────────┘
                 ▼
@@ -48,7 +48,7 @@ Notes:
 
 ## Implementation plan
 
-1. **Project**: `dotnet new webapi -n RateLimiter.Gateway` (.NET 8+). Add
+1. **Project**: `dotnet new webapi -n RateLimiter.Gateway` (.NET 11). Add
    `StackExchange.Redis`.
 2. **Configuration**: bind a `RateLimiterOptions` record that mirrors the
    front-end `LimiterConfig` union (`algorithm`, plus that algorithm's
