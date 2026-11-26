@@ -67,20 +67,32 @@ export function ControlsPanel({ sim }: { sim: Simulation }) {
     <Panel>
       <section>
         <SectionTitle>Execution Mode</SectionTitle>
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1 text-xs">
-          <div className="rounded-md bg-slate-800 px-2 py-2 text-center font-medium text-slate-100">
-            Client-Side Engine
-            <div className="mt-0.5 font-mono text-[10px] text-emerald-400">● active</div>
-          </div>
-          <button
-            type="button"
-            disabled
-            title="Phase 2: see /backend-reference"
-            className="cursor-not-allowed rounded-md px-2 py-2 text-center text-slate-500"
-          >
-            .NET + Redis Backend
-            <div className="mt-0.5 font-mono text-[10px] text-amber-400/80">coming soon · phase 2</div>
-          </button>
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1 text-xs" role="radiogroup">
+          {(
+            [
+              ['client', 'Client-Side Engine', 'runs in browser'],
+              ['remote', '.NET + Redis Backend', 'localhost:8080'],
+            ] as const
+          ).map(([mode, label, hint]) => {
+            const active = sim.mode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => sim.setMode(mode)}
+                className={`rounded-md px-2 py-2 text-center transition-colors ${
+                  active ? 'bg-slate-800 font-medium text-slate-100' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {label}
+                <div className={`mt-0.5 font-mono text-[10px] ${active ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {active ? '● active' : hint}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -89,16 +101,20 @@ export function ControlsPanel({ sim }: { sim: Simulation }) {
         <div className="space-y-2" role="radiogroup">
           {ALGORITHM_ORDER.map((id) => {
             const selected = id === algorithm;
+            // The backend only implements Token Bucket so far.
+            const unavailable = sim.mode === 'remote' && id !== 'token-bucket';
             return (
               <button
                 key={id}
                 type="button"
                 role="radio"
                 aria-checked={selected}
+                disabled={unavailable}
+                title={unavailable ? 'Not implemented in the backend yet; switch to Client-Side Engine' : undefined}
                 onClick={() => setAlgorithm(id)}
                 className={`relative w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${
                   selected ? 'border-sky-500/60 bg-sky-500/10' : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
-                }`}
+                } ${unavailable ? 'cursor-not-allowed opacity-40 hover:border-slate-800' : ''}`}
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -110,7 +126,9 @@ export function ControlsPanel({ sim }: { sim: Simulation }) {
                   </span>
                   <span className="text-sm font-medium text-slate-100">{ALGORITHM_INFO[id].name}</span>
                 </div>
-                <div className="mt-0.5 pl-[22px] text-xs text-slate-500">{ALGORITHM_INFO[id].tagline}</div>
+                <div className="mt-0.5 pl-[22px] text-xs text-slate-500">
+                  {unavailable ? 'Client-side engine only' : ALGORITHM_INFO[id].tagline}
+                </div>
               </button>
             );
           })}
@@ -193,7 +211,11 @@ export function ControlsPanel({ sim }: { sim: Simulation }) {
             />
           </>
         )}
-        <p className="text-[11px] leading-relaxed text-slate-500">Changing a parameter resets the limiter state.</p>
+        <p className="text-[11px] leading-relaxed text-slate-500">
+          {sim.mode === 'remote'
+            ? 'Changes are sent to the backend and apply to every gateway instance. Tokens already in Redis are kept.'
+            : 'Changing a parameter resets the limiter state.'}
+        </p>
       </section>
     </Panel>
   );

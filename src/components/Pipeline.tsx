@@ -4,6 +4,7 @@ import { ALGORITHM_INFO } from '../data/algorithmInfo';
 import { useAnimationFrame } from '../hooks/useAnimationFrame';
 import { INBOUND_TRAVEL_MS, type ParticlePhase, type Simulation } from '../hooks/useSimulation';
 import { LeakyBucketViz } from './visualizers/LeakyBucketViz';
+import { RemoteBackendViz } from './visualizers/RemoteBackendViz';
 import { TokenBucketViz } from './visualizers/TokenBucketViz';
 import { WindowTimelineViz } from './visualizers/WindowTimelineViz';
 
@@ -123,6 +124,8 @@ function Gateway({ sim, g }: { sim: Simulation; g: Geometry }) {
     if (s.kind === 'token-bucket') body = <TokenBucketViz state={s} />;
     else if (s.kind === 'leaky-bucket') body = <LeakyBucketViz state={s} />;
     else body = <WindowTimelineViz state={s} now={snap.now} log={sim.getDecisionLog()} width={innerWidth} />;
+  } else if (sim.mode === 'remote') {
+    body = <RemoteBackendViz stats={sim.getRemoteStats()} capacity={sim.params.tokenBucket.capacity} />;
   }
 
   return (
@@ -131,7 +134,9 @@ function Gateway({ sim, g }: { sim: Simulation; g: Geometry }) {
       style={{ left: g.gatewayLeft, top: g.gatewayTop, width: g.gatewayRight - g.gatewayLeft, height: g.gatewayBottom - g.gatewayTop }}
     >
       <div className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-2">
-        <span className="truncate text-xs font-semibold text-slate-100">API Gateway · Rate Limiter</span>
+        <span className="truncate text-xs font-semibold text-slate-100">
+          {sim.mode === 'remote' ? 'API Gateway · .NET + Redis' : 'API Gateway · Rate Limiter'}
+        </span>
         <span className="shrink-0 whitespace-nowrap rounded bg-sky-500/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-300">
           {ALGORITHM_INFO[sim.algorithm].name}
         </span>
@@ -168,6 +173,14 @@ export function Pipeline({ sim }: { sim: Simulation }) {
         className="relative overflow-hidden rounded-lg bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.08)_1px,transparent_0)] [background-size:20px_20px]"
         style={{ height: HEIGHT }}
       >
+        {sim.backendError && (
+          <div
+            role="alert"
+            className="absolute inset-x-4 top-3 z-10 rounded-md border border-rose-500/40 bg-rose-950/90 px-3 py-2 font-mono text-[11px] text-rose-200"
+          >
+            {sim.backendError}
+          </div>
+        )}
         {width > 0 && (
           <>
             <svg className="absolute inset-0" width={width} height={HEIGHT} aria-hidden>

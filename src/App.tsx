@@ -16,7 +16,8 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-sm font-semibold text-slate-100">Distributed Rate Limiter &amp; Traffic Shaper</h1>
-              <p className="font-mono text-[11px] text-slate-500">interactive simulator · phase 1 · client-side engine</p>
+              <p className="font-mono text-[11px] text-slate-500">interactive simulator ·{' '}
+                {sim.mode === 'remote' ? 'distributed .NET + Redis backend' : 'client-side engine'}</p>
             </div>
           </div>
           <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] text-emerald-300">

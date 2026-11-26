@@ -13,6 +13,8 @@ export interface RateLimitDecision {
   queuedMs?: number;
   /** Provider clock time (ms) at which the decision was made. */
   decidedAt: number;
+  /** Which gateway instance answered (remote provider only). */
+  servedBy?: string;
 }
 
 /** Internal limiter state plus the provider clock it was sampled at. */

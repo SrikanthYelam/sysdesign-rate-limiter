@@ -8,14 +8,18 @@ throughput live.
 
 Built with React, TypeScript, Tailwind CSS and Framer Motion.
 
-![Token Bucket absorbing a 25-request burst](docs/screenshots/token-bucket.png)
-
 ## Screenshots
 
-| Leaky Bucket | Fixed Window Counter | Sliding Window Log |
-|---|---|---|
-| ![Leaky Bucket queue during a burst](docs/screenshots/leaky-bucket.png) | ![Fixed Window Counter timeline](docs/screenshots/fixed-window.png) | ![Sliding Window Log with Poisson jitter](docs/screenshots/sliding-window-log.png) |
-| A burst fills the FIFO queue; upstream still gets a steady 5 rps. | Each window allows up to the limit, then resets at the boundary. | With jitter on, the actual rate varies around the target. |
+**Client-side engine:** the algorithm runs in the browser. Here a 25-request
+burst has emptied the token bucket, and the overflow drops as 429s.
+
+![Client-side engine: Token Bucket after a 25-request burst](docs/screenshots/client-engine.png)
+
+**.NET + Redis backend:** every request is a real HTTP call through NGINX to
+one of three gateway replicas sharing one bucket in Redis. Allowed traffic
+holds at the 5/s refill rate, and the gateway box shows which replica answered.
+
+![Backend mode: requests split across three gateway replicas](docs/screenshots/backend.png)
 
 ## Run it
 
@@ -49,7 +53,14 @@ curl -i -X POST localhost:8080/api/rate-limit/evaluate -H 'content-type: applica
   -d '{"requestId":"r1","clientId":"me"}'    # X-Instance shows which replica answered
 ```
 
-The simulator UI does not call the backend yet; it still runs the client-side engine.
+### Use it from the simulator
+
+With the stack up, run `npm run dev` and pick **.NET + Redis Backend** under
+Execution Mode. The dev server proxies `/api` to `localhost:8080`, so every
+request in the pipeline becomes a real HTTP call through NGINX to one of the
+replicas. The gateway box then shows the tokens left after the last allowed
+request and how many requests each replica (`X-Instance`) answered. Only Token
+Bucket is available in this mode; the other algorithms stay client-side.
 
 ## Project layout
 
