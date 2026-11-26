@@ -1,6 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AlgorithmId, LimiterConfig } from '../algorithms';
-import { ClientSimulationProvider, type IRateLimiterProvider, type ProviderSnapshot } from '../engine';
+import {
+  ClientSimulationProvider,
+  RemoteApiProvider,
+  type IRateLimiterProvider,
+  type ProviderSnapshot,
+} from '../engine';
+
+export type ExecutionMode = 'client' | 'remote';
+
+/** What the UI can show about the remote backend, whose state lives in Redis. */
+export interface RemoteStats {
+  /** Tokens left after the most recent allowed request. */
+  lastRemaining: number | null;
+  /** Requests answered per gateway replica (X-Instance header). */
+  byInstance: Map<string, number>;
+}
+
+const BACKEND_DOWN_MESSAGE = "Can't reach the backend on localhost:8080. Start it with: cd backend && docker compose up";
 
 /** Time a request particle takes to travel from Clients to the Gateway. */
 export const INBOUND_TRAVEL_MS = 700;
@@ -94,6 +111,8 @@ function applyParticleOps(particles: Particle[], ops: ParticleOp[]): Particle[] 
 const emptySeries =(): RpsSample[] => Array.from({ length: HISTORY_SAMPLES }, () => ({ incoming: 0, allowed: 0 }));
 
 export function useSimulation() {
+  const [mode, setModeState] = useState<ExecutionMode>('client');
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [algorithm, setAlgorithm] = useState<AlgorithmId>('token-bucket');
   const [params, setParams] = useState<AlgorithmParams>(DEFAULT_PARAMS);
   const [rps, setRps] = useState(8);
@@ -115,6 +134,7 @@ export function useSimulation() {
   const decisionLog = useRef<DecisionEvent[]>([]);
   const particleOps = useRef<ParticleOp[]>([]);
   const flushScheduled = useRef(false);
+  const remoteStats = useRef<RemoteStats>({ lastRemaining: null, byInstance: new Map() });
 
   /** setTimeout that is automatically cancelled on unmount. */
   const later = useCallback((fn: () => void, ms: number) => {
@@ -125,24 +145,42 @@ export function useSimulation() {
     timers.current.add(handle);
   }, []);
 
-  // Provider lifecycle (Phase 2: choose RemoteApiProvider here based on mode).
+  /** The backend only implements Token Bucket so far. */
+  const setMode = useCallback((next: ExecutionMode) => {
+    if (next === 'remote') setAlgorithm('token-bucket');
+    setModeState(next);
+  }, []);
+
+  // Cancel every pending timer on unmount.
   useEffect(() => {
-    const provider = new ClientSimulationProvider(configRef.current);
-    providerRef.current = provider;
     const pendingTimers = timers.current;
     return () => {
-      provider.dispose();
-      providerRef.current = null;
       pendingTimers.forEach((h) => window.clearTimeout(h));
       pendingTimers.clear();
       flushScheduled.current = false;
     };
   }, []);
 
+  // One provider per execution mode. Requests already on their way to the
+  // gateway are evaluated by whichever provider is current when they arrive.
   useEffect(() => {
-    void providerRef.current?.configure(config);
+    // '' = same origin; the Vite dev server proxies /api to the backend (vite.config.ts).
+    const provider =
+      mode === 'remote' ? new RemoteApiProvider('') : new ClientSimulationProvider(configRef.current);
+    providerRef.current = provider;
+    remoteStats.current = { lastRemaining: null, byInstance: new Map() };
+    setBackendError(null);
+    return () => {
+      provider.dispose();
+      providerRef.current = null;
+    };
+  }, [mode]);
+
+  // Declared after the provider effect so a new provider is configured right away.
+  useEffect(() => {
+    providerRef.current?.configure(config).catch(() => setBackendError(BACKEND_DOWN_MESSAGE));
     decisionLog.current = []; // limiter state was reset, so is its history
-  }, [config]);
+  }, [config, mode]);
 
   // Particle changes are queued and applied in one batch per ~frame, so 50 RPS
   // (three changes per request) costs ~60 renders/s instead of ~150.
@@ -178,18 +216,31 @@ export function useSimulation() {
       incomingTimes.current.push(performance.now());
       setPhase(id, 'waiting');
 
-      provider.evaluateRequest(id).then((decision) => {
-        if (decision.allowed) {
-          counts.current.allowed++;
-          allowedTimes.current.push(performance.now());
-        } else {
-          counts.current.throttled++;
-        }
-        decisionLog.current.push({ t: decision.decidedAt, allowed: decision.allowed });
-        setPhase(id, decision.allowed ? 'allowed' : 'rejected');
-      });
+      provider.evaluateRequest(id).then(
+        (decision) => {
+          if (decision.allowed) {
+            counts.current.allowed++;
+            allowedTimes.current.push(performance.now());
+          } else {
+            counts.current.throttled++;
+          }
+          decisionLog.current.push({ t: decision.decidedAt, allowed: decision.allowed });
+          if (decision.servedBy) {
+            const stats = remoteStats.current;
+            stats.byInstance.set(decision.servedBy, (stats.byInstance.get(decision.servedBy) ?? 0) + 1);
+            if (decision.allowed && decision.remaining !== undefined) stats.lastRemaining = decision.remaining;
+          }
+          setBackendError(null);
+          setPhase(id, decision.allowed ? 'allowed' : 'rejected');
+        },
+        // Backend unreachable: drop the particle instead of leaving it stuck at the gateway.
+        () => {
+          setBackendError(BACKEND_DOWN_MESSAGE);
+          removeParticle(id);
+        },
+      );
     }, INBOUND_TRAVEL_MS);
-  }, [later, queueParticleOp, setPhase]);
+  }, [later, queueParticleOp, setPhase, removeParticle]);
 
   const sendBurst = useCallback(() => {
     for (let i = 0; i < BURST_SIZE; i++) later(sendRequest, i * BURST_STAGGER_MS);
@@ -226,10 +277,11 @@ export function useSimulation() {
         incoming: countLastSecond(incomingTimes.current, now),
         allowed: countLastSecond(allowedTimes.current, now),
       };
-      const providerNow = providerRef.current?.getSnapshot()?.now ?? 0;
+      // Prune relative to the newest entry: the remote provider has no snapshot clock.
       const log = decisionLog.current;
+      const newest = log.length > 0 ? log[log.length - 1].t : 0;
       let stale = 0;
-      while (stale < log.length && log[stale].t < providerNow - DECISION_LOG_MS) stale++;
+      while (stale < log.length && log[stale].t < newest - DECISION_LOG_MS) stale++;
       log.splice(0, stale);
 
       setTelemetry((prev) => ({
@@ -243,8 +295,12 @@ export function useSimulation() {
 
   const getSnapshot = useCallback((): ProviderSnapshot | null => providerRef.current?.getSnapshot() ?? null, []);
   const getDecisionLog = useCallback((): readonly DecisionEvent[] => decisionLog.current, []);
+  const getRemoteStats = useCallback((): RemoteStats => remoteStats.current, []);
 
   return {
+    mode,
+    setMode,
+    backendError,
     algorithm,
     setAlgorithm,
     params,
@@ -259,6 +315,7 @@ export function useSimulation() {
     telemetry,
     getSnapshot,
     getDecisionLog,
+    getRemoteStats,
   };
 }
 

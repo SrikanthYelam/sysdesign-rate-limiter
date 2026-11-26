@@ -49,7 +49,14 @@ curl -i -X POST localhost:8080/api/rate-limit/evaluate -H 'content-type: applica
   -d '{"requestId":"r1","clientId":"me"}'    # X-Instance shows which replica answered
 ```
 
-The simulator UI does not call the backend yet; it still runs the client-side engine.
+### Use it from the simulator
+
+With the stack up, run `npm run dev` and pick **.NET + Redis Backend** under
+Execution Mode. The dev server proxies `/api` to `localhost:8080`, so every
+request in the pipeline becomes a real HTTP call through NGINX to one of the
+replicas. The gateway box then shows the tokens left after the last allowed
+request and how many requests each replica (`X-Instance`) answered. Only Token
+Bucket is available in this mode; the other algorithms stay client-side.
 
 ## Project layout
 
